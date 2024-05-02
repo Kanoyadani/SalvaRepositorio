@@ -1,169 +1,150 @@
 package com.econeigigobhoood.sgb.Controller;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.List;
-
+import java.sql.Statement;
 import javax.swing.JOptionPane;
 import javax.swing.table.DefaultTableModel;
 
 
-import com.econeigigobhoood.sgb.Model.Cadastro;
-import com.econeigigobhoood.sgb.Model.Emprestar;
+
 import com.econeigigobhoood.sgb.Model.Livro;
 import com.econeigigobhoood.sgb.Model.Tables;
 
-public abstract class Controller implements Cadastro, Emprestar,Tables {
-    DefaultTableModel modelo = new DefaultTableModel();
 
-    protected String Nome;
-    protected String Autor;
-    protected int Paginas;
-    protected String Status;
+public  class Controller implements Tables {
+    private DefaultTableModel modelo = new DefaultTableModel();
+    private Connection conexion;
+       
 
-    private List<Livro> biblioteca;
-
-    public Controller() {
-        this.biblioteca = new ArrayList<>();
+    @Override
+    public boolean hayConection() {
+        return (conexion != null);
     }
 
-    
-    public void adicionarLivro(int Idlivro,String Nome, String Autor, int Paginas) {
-        Livro livro = new Livro(Idlivro,Nome, Autor, Paginas);
-        biblioteca.add(livro);
-        System.out.println("Livro cadastrado com sucesso!");
+    @Override
+    public Connection conectar() throws SQLException {
+        try {
+            Class.forName("org.h2.Driver");
+            // Estabelece a conexão com o banco de dados H2 em memória
+            conexion = DriverManager.getConnection("jdbc:h2:~/test", "sa", "");
+        } catch (ClassNotFoundException ex) {
+            ex.printStackTrace();
+        }
+        return conexion;
     }
 
-  
-    public void listarLivros() {
-        for (Livro livro : biblioteca) {
-            System.out.println(livro);
+    @Override
+    public ResultSet executarSQL(String consultaSQL) throws SQLException {
+        Statement sql = conexion.createStatement();
+        return sql.executeQuery(consultaSQL);
+    }
+
+    @Override
+    public boolean executarAtualizacaoSQL(String comandoSQL) throws SQLException {
+        PreparedStatement sql = conexion.prepareStatement(comandoSQL);
+        System.out.println(sql);
+        return sql.executeUpdate() != 0;
+    }
+
+    @Override
+    public void desconectar() throws SQLException {
+        if (conexion != null) {
+            conexion.close();
+            conexion = null;
         }
     }
-
-
-    public void emprestar(String Status,int IdLvro){
-        
-    }
-
-    public void devolver(String Status,int IdLvro){
-
-    }
     
-
-    
-    public DefaultTableModel  table(){
-        String url = "jdbc:h2:mem:testdb";
-        String user = "sa";
-        String password = "";
-        
-       try {
-        Connection connection = Tables.conectar();
-        ResultSet resultado = Tables.executarSQL("SELECT IdLivro, Nome, Autor, FROM Livros;");
-        if(resultado != null){
-            while (resultado.next()){
-                int IdLivro =  resultado.getInt("IdLivro");
-                String Nome = resultado.getString("Nome");
-                String Autor = resultado.getString("Autor");
-                int Paginas = resultado.getInt("Paginas");
-                String Status = resultado.getString("Staus");
-
-
-
-                    Livro setlivro = new Livro();
-                    Livro.setIdlivro(resultado.getInt("IdLivro"));
-
-                    System.out.println("ID LIBRO: " + setlivro.getIdlivro());
-
-                    
-                    Object[] fila = {IdLivro, Nome, Autor, Paginas};
-                    modelo.addRow(fila);
-            }
-        }
-
-            }catch (Exception e){
-                e.printStackTrace();
-            }finally{
-                Tables.desconectar();
-            }
-              return modelo;   
-    }
-
-
-
-    public DefaultTableModel Busca(String Id) {
-        DefaultTableModel modelo = new DefaultTableModel();
-    
-        
-            modelo.addColumn("IdLivro");
-
-
-    
-        String sql = "SELECT IdLivro, Nome, Autor FROM Livros lb WHERE IdLivro LIKE  ?";
+    public DefaultTableModel table() throws SQLException {
+        //DefaultTableModel modelo = new DefaultTableModel(); // Inicializa o modelo de tabela
     
         try {
-            Tables.conectar();
-            PreparedStatement stmt = Tables.conexion.prepareStatement(sql);
-            String parametro = "%" + Id + "%";
-            stmt.setString(1, parametro);
-
-    
-            ResultSet resultado = stmt.executeQuery();
-    
+            conectar();
+            ResultSet resultado = executarSQL("SELECT IdLivro, Nome, Autor, Paginas, Status FROM Livros;"); // Consulta SQL para selecionar todos os livros
             if (resultado != null) {
                 while (resultado.next()) {
-                    int IdLivro =  resultado.getInt("IdLivro");
+                    int IdLivro = resultado.getInt("IdLivro");
                     String Nome = resultado.getString("Nome");
                     String Autor = resultado.getString("Autor");
                     int Paginas = resultado.getInt("Paginas");
+                    String Status = resultado.getString("Status");
     
-                        Livro livros = new Livro();
-                        Livro.setIdlivro(resultado.getInt("IdLivro"));
-    
-                        System.out.println("ID LIBRO: " + livros.getIdlivro());
-    
-                        
-                        Object[] fila = {IdLivro, Nome, Autor, Paginas};
-                        modelo.addRow(fila);
+                    Object[] fila = { IdLivro, Nome, Autor, Paginas, Status };
+                    modelo.addRow(fila);
+                    System.out.println("Dados do Livro");
+                    System.out.println("IdLivro:"+ IdLivro);
+                    System.out.println("Livro:"+ Nome);
+                    System.out.println("Autor:"+ Autor);
+                    System.out.println("Paginas:"+ Paginas);
+                    System.out.println("Status:"+ Status);
+                    System.out.println("--------------------");// Adiciona uma nova linha com os dados do livro ao modelo de tabela
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
-            System.out.println("Error consultando libros");
         } finally {
-            Tables.desconectar(); 
+            desconectar();
         }
+        return modelo; // Retorna o modelo preenchido com os dados dos livros
+    }
     
-        return modelo;
+
+    public void insertarLivro(String Nome, String Autor, int Paginas, String Status) throws SQLException {
+        try {
+            conectar();
+            String consulta = "INSERT INTO Livros (Nome, Autor, Paginas, Status) VALUES ( ?, ?, ?, ?)";
+            PreparedStatement statement = conexion.prepareStatement(consulta);
+            //statement.setInt(1, Livro.setIdlivro(IdLivro)); 
+            statement.setString(1, Livro.setNome(Nome));
+            statement.setString(2, Livro.setAutor(Autor));
+            statement.setInt(3, Livro.setPaginas(Paginas));
+            statement.setString(4, Livro.setStatus(Status));
+
+            statement.executeUpdate();
+            JOptionPane.showMessageDialog(null, "O Livro Incluido foi o: " + Livro.getNome());
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            
+                desconectar(); 
+            
+        }
     }
 
+    public void atualizarLivro(String Status, int IdLivro) throws SQLException {
+        try {
+            conectar();
+            String consulta = "UPDATE Livros SET Status = ? WHERE Idlivro = ?";
+            PreparedStatement statement = conexion.prepareStatement(consulta);
+            statement.setString(1, Livro.setStatus(Status));
+            statement.setInt(2, Livro.setIdlivro(IdLivro));
 
+            statement.executeUpdate();
 
-     public static void insertarLibro(Livro Livro) {
-    try {
-        Tables.conectar();
-        String consulta = "INSERT INTO Livros (IdLivro, Nome, Autor, Paginas, Status) VALUES ( ?, ?, ?, ?, ?)";
-        PreparedStatement statement = Tables.conexion.prepareStatement(consulta);
-        statement.setInt(1, Livro.getIdlivro());
-        statement.setString(2, Livro.getNome());
-        statement.setString(3, Livro.getAutor());
-        statement.setInt(4, Livro.getPaginas());
-        statement.setString(5, Livro.getStatus());
+        
+            JOptionPane.showMessageDialog(null, "O livro foi atualizado com sucesso!");
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            desconectar(); 
+        }
+    }
+    
 
-        statement.executeUpdate();
-        JOptionPane.showMessageDialog(null, "Se ha agregado exitosamente el libro: " + Livro.getNome());
-    } catch (Exception e) {
-        e.printStackTrace();
-    } finally {
-        Tables.desconectar(); // Cerrar la conexión
+    public void criarTabelaLivros() throws SQLException {
+        conectar();
+        String query = "CREATE TABLE IF NOT EXISTS Livros ("
+                     + "IdLivro SERIAL PRIMARY KEY,"
+                     + "Nome VARCHAR(255),"
+                     + "Autor VARCHAR(255),"
+                     + "Paginas INT,"
+                     + "Status VARCHAR(50)"
+                     + ");";
+        executarAtualizacaoSQL(query);
+
+        desconectar();
     }
 }
-
-    
-}
-
-
-
